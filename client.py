@@ -12,7 +12,7 @@ BROADCAST = b'\xff\xff\xff\xff\xff\xff'
 def read_data():
     session = requests.Session()
     while True:
-        wdata = tap.read()
+        wdata = tap.read(tap.mtu + 4)
         # Bytes 0-1 are "flags", bytes 2-3 are a copy of the protocol.
         # From byte 4 on is the real ethernet frame.
         #wdata = wdata[4:]
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     while True:
         ans = session.post(server + '/recv', my_mac)
         if ans.status_code == 204:
-            #time.sleep(0.1)
+            time.sleep(0.1)
             continue
         if ans.status_code != 200:
             print("recv: received status code " + ans.status_code + ": " +
