@@ -12,7 +12,7 @@ BROADCAST = b'\xff\xff\xff\xff\xff\xff'
 def read_data():
     session = requests.Session()
     while True:
-        wdata = tap.read(tap.mtu + 4)
+        wdata = tap.read(2 * tap.mtu)
         # Bytes 0-1 are "flags", bytes 2-3 are a copy of the protocol.
         # From byte 4 on is the real ethernet frame.
         #wdata = wdata[4:]
