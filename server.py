@@ -19,8 +19,8 @@ def read_data():
         data = tap.read(tap.mtu)
         # Bytes 0-1 are "flags", bytes 2-3 are a copy of the protocol.
         # From byte 4 on is the real ethernet frame.
-        data = data[4:]
-        dest_mac = data[:6]
+        #data = data[4:]
+        dest_mac = data[4:10]
         if dest_mac == BROADCAST:
             with lck:
                 for k in queue:
@@ -44,8 +44,6 @@ def application(env, start_response):
             ip = bytes(bytearray(IP_PREFIX)) + new_mac[4:6]
             with lck:
                 queue[new_mac] = deque()
-            print(new_mac)
-            print(ip)
             start_response('200 OK', [])
             return [new_mac, ip]
 
@@ -55,7 +53,8 @@ def application(env, start_response):
                 start_response('403 Forbidden', [])
                 return [b""]
             data = env['wsgi.input'].read()
-            dest_mac = data[:6]
+            dest_mac = data[4:10]
+            print(client_mac, dest_mac, data)
             if dest_mac == MYMAC:
                 tap.write(data)
                 start_response('200 OK', [])
