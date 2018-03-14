@@ -101,7 +101,7 @@ def application(env, start_response):
 if __name__ == '__main__':
     global tap
     tap = TunTapDevice(flags=IFF_TAP)
-    tap.addr = "".join(map(str, IP_PREFIX + (0, 1)))
+    tap.addr = ".".join(map(str, IP_PREFIX + (0, 1)))
     tap.netmask = '255.255.0.0'
     tap.mtu = 1300
     tap.hwaddr = MYMAC
