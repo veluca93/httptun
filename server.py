@@ -54,7 +54,6 @@ def application(env, start_response):
                 return [b""]
             data = env['wsgi.input'].read()
             dest_mac = data[4:10]
-            print(client_mac, dest_mac, data)
             if dest_mac == MYMAC:
                 tap.write(data)
                 start_response('200 OK', [])
