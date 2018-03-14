@@ -34,7 +34,7 @@ def read_data():
 def application(env, start_response):
     try:
         if env['PATH_INFO'] == '/connect':
-            if env['wsgi.input'].read() != 'very_secret':
+            if env['wsgi.input'].read() != b'very_secret':
                 start_response('403 Forbidden', [])
                 return [b""]
             while True:
