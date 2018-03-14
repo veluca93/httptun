@@ -41,7 +41,7 @@ def application(env, start_response):
                 new_mac = b'terc' + os.urandom(2)
                 if new_mac not in queue:
                     break
-            ip = bytes(bytearray(IP_PREFIX)) + new_mac[4:5]
+            ip = bytes(bytearray(IP_PREFIX)) + new_mac[4:6]
             with lck:
                 queue[new_mac] = deque()
             print(new_mac)
