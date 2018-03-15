@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import datetime
 import logging
 import os
 import threading
@@ -6,9 +7,6 @@ import traceback
 from queue import Queue, Empty
 from wsgiserver import WSGIServer
 from pytun import TunTapDevice, IFF_TAP
-
-logger = logging.getLogger('httptun')
-logger.setLevel(logging.INFO)
 
 MYMAC = b'ter000'
 IP_PREFIX = (10, 9)
@@ -49,8 +47,7 @@ def read_data():
         put_in_queue(dest_mac, data)
 
 
-def application(env, start_response):
-    logger.info(env['PATH_INFO'])
+def inner_application(env, start_response):
     try:
         if env['PATH_INFO'] == '/connect':
             if env['wsgi.input'].read() != b'very_secret':
@@ -101,6 +98,18 @@ def application(env, start_response):
         traceback.print_exc()
         start_response('500', [])
         return [b'Internal server error']
+
+def application(env, real_start_response):
+    answer_status = 0
+    def start_response(status, hdrs):
+        nonlocal answer_status
+        answer_status = status
+        real_start_response(status, hdrs)
+    start = datetime.datetime.now()
+    data = inner_application(env, start_response)
+    end = datetime.datetime.now()
+    print(env['REMOTE_ADDR'] + ": " + "%.5f" % ((end-start).total_seconds()) + " " + env['PATH_INFO'] + ' ' + str(answer_status))
+    return data
 
 
 if __name__ == '__main__':
