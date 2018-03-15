@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
+import logging
 import os
 import threading
 import traceback
-from gevent.pywsgi import WSGIServer
-from gevent.lock import Semaphore
-from gevent.queue import Queue, Empty
+from queue import Queue, Empty
+from wsgiserver import WSGIServer
 from pytun import TunTapDevice, IFF_TAP
+
+logger = logging.getLogger('httptun')
+logger.setLevel(logging.INFO)
 
 MYMAC = b'ter000'
 IP_PREFIX = (10, 9)
@@ -16,6 +19,7 @@ queue = dict()
 
 def init_queue(dest_mac):
     queue[dest_mac] = Queue()
+
 
 def put_in_queue(dest_mac, data):
     if dest_mac == BROADCAST:
@@ -46,6 +50,7 @@ def read_data():
 
 
 def application(env, start_response):
+    logger.info(env['PATH_INFO'])
     try:
         if env['PATH_INFO'] == '/connect':
             if env['wsgi.input'].read() != b'very_secret':
@@ -109,4 +114,4 @@ if __name__ == '__main__':
     tap_reader = threading.Thread(target=read_data, daemon=True)
     tap_reader.start()
     print('Serving on 8088...')
-    WSGIServer(('', 8088), application).serve_forever()
+    WSGIServer(application, port=8088).start()
