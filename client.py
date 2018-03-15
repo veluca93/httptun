@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 import sys
-import time
 import threading
+from queue import Queue
 import requests
 from pytun import TunTapDevice, IFF_TAP
 
 IP_PREFIX = (10, 9)
 BROADCAST = b'\xff\xff\xff\xff\xff\xff'
 
+server_queue = Queue()
+
 
 def read_data():
-    session = requests.Session()
     while True:
         wdata = tap.read(2 * tap.mtu)
-        # Bytes 0-1 are "flags", bytes 2-3 are a copy of the protocol.
-        # From byte 4 on is the real ethernet frame.
-        #wdata = wdata[4:]
+        server_queue.put(wdata)
+
+
+def send_data():
+    session = requests.Session()
+    while True:
+        wdata = server_queue.get()
         wans = session.post(server + '/send', my_mac + wdata)
         if wans.status_code != 200:
             print("send: received status code " + str(wans.status_code) +
@@ -40,6 +45,8 @@ if __name__ == '__main__':
     tap.up()
     tap_reader = threading.Thread(target=read_data, daemon=True)
     tap_reader.start()
+    sender = threading.Thread(target=send_data, daemon=True)
+    sender.start()
 
     while True:
         ans = session.post(server + '/recv', my_mac)
