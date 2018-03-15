@@ -44,10 +44,9 @@ if __name__ == '__main__':
     while True:
         ans = session.post(server + '/recv', my_mac)
         if ans.status_code == 204:
-            time.sleep(0.1)
             continue
         if ans.status_code != 200:
-            print("recv: received status code " + ans.status_code + ": " +
+            print("recv: received status code " + str(ans.status_code) + ": " +
                   ans.text)
             sys.exit(1)
         data = ans.content

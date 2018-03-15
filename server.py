@@ -1,17 +1,38 @@
 #!/usr/bin/env python3
 import os
 import threading
-from collections import deque
 import traceback
 from gevent.pywsgi import WSGIServer
+from gevent.lock import Semaphore
+from gevent.queue import Queue, Empty
 from pytun import TunTapDevice, IFF_TAP
 
 MYMAC = b'ter000'
 IP_PREFIX = (10, 9)
 BROADCAST = b'\xff\xff\xff\xff\xff\xff'
 
-lck = threading.Lock()
 queue = dict()
+
+
+def init_queue(dest_mac):
+    queue[dest_mac] = Queue()
+
+def put_in_queue(dest_mac, data):
+    if dest_mac == BROADCAST:
+        for k in queue:
+            queue[k].put(data)
+        return True
+    if not dest_mac in queue:
+        return False
+    queue[dest_mac].put(data)
+    return True
+
+
+def get_from_queue(dest_mac):
+    try:
+        return queue[dest_mac].get(timeout=2)
+    except Empty:
+        return None
 
 
 def read_data():
@@ -21,14 +42,7 @@ def read_data():
         # From byte 4 on is the real ethernet frame.
         #data = data[4:]
         dest_mac = data[4:10]
-        if dest_mac == BROADCAST:
-            with lck:
-                for k in queue:
-                    queue[k].append(data)
-        else:
-            with lck:
-                if dest_mac in queue:
-                    queue[dest_mac].append(data)
+        put_in_queue(dest_mac, data)
 
 
 def application(env, start_response):
@@ -42,8 +56,7 @@ def application(env, start_response):
                 if new_mac not in queue:
                     break
             ip = bytes(bytearray(IP_PREFIX)) + new_mac[4:6]
-            with lck:
-                queue[new_mac] = deque()
+            init_queue(new_mac)
             start_response('200 OK', [])
             return [new_mac, ip]
 
@@ -54,23 +67,14 @@ def application(env, start_response):
                 return [b""]
             data = env['wsgi.input'].read()
             dest_mac = data[4:10]
+            if dest_mac == MYMAC or dest_mac == BROADCAST:
+                tap.write(data)
             if dest_mac == MYMAC:
-                tap.write(data)
                 start_response('200 OK', [])
                 return []
-            if dest_mac == BROADCAST:
-                tap.write(data)
-                with lck:
-                    for k in queue:
-                        if k != client_mac:
-                            queue[k].append(data)
-                start_response('200 OK', [])
-                return []
-            if dest_mac not in queue:
+            if not put_in_queue(dest_mac, data):
                 start_response('404 Not Found', [])
                 return [b'No such MAC address']
-            with lck:
-                queue[dest_mac].append(data)
             start_response('200 OK', [])
             return []
 
@@ -79,12 +83,10 @@ def application(env, start_response):
             if client_mac not in queue:
                 start_response('403 Forbidden', [])
                 return [b""]
-            with lck:
-                # TODO: wait for a packet?
-                if not queue[client_mac]:
-                    start_response('204 No content', [])
-                    return [b'']
-                data = queue[client_mac].popleft()
+            data = get_from_queue(client_mac)
+            if data is None:
+                start_response('204 No content', [])
+                return [b'']
             start_response('200 OK', [])
             return [data]
 
