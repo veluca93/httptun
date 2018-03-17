@@ -4,9 +4,7 @@ import threading
 from queue import Queue
 import requests
 from pytun import TunTapDevice, IFF_TAP
-
-IP_PREFIX = (10, 9)
-BROADCAST = b'\xff\xff\xff\xff\xff\xff'
+from common import get_mac, BROADCAST
 
 server_queue = Queue()
 
@@ -57,7 +55,8 @@ def main():
                   ans.text)
             sys.exit(1)
         data = ans.content
-        if data[4:10] == my_mac or data[4:10] == BROADCAST:
+        packet_mac = get_mac(data)
+        if packet_mac == my_mac or packet_mac == BROADCAST:
             tap.write(data)
 
 

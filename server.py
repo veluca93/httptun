@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 import datetime
-import logging
 import os
 import threading
 import traceback
 from queue import Queue, Empty
 from wsgiserver import WSGIServer
 from pytun import TunTapDevice, IFF_TAP
+from common import get_mac, BROADCAST
 
 MYMAC = b'ter000'
 IP_PREFIX = (10, 9)
-BROADCAST = b'\xff\xff\xff\xff\xff\xff'
 
 queue = dict()
 
@@ -40,10 +39,7 @@ def get_from_queue(dest_mac):
 def read_data():
     while True:
         data = tap.read(2 * tap.mtu)
-        # Bytes 0-1 are "flags", bytes 2-3 are a copy of the protocol.
-        # From byte 4 on is the real ethernet frame.
-        #data = data[4:]
-        dest_mac = data[4:10]
+        dest_mac = get_mac(data)
         put_in_queue(dest_mac, data)
 
 
@@ -68,7 +64,7 @@ def inner_application(env, start_response):
                 start_response('403 Forbidden', [])
                 return [b""]
             data = env['wsgi.input'].read()
-            dest_mac = data[4:10]
+            dest_mac = get_mac(data)
             if dest_mac == MYMAC or dest_mac == BROADCAST:
                 tap.write(data)
             if dest_mac == MYMAC:
