@@ -26,7 +26,7 @@ def parse_packets(stream, callback):
         hdr = stream.read(struct.calcsize(HDR_FORMAT))
         if not hdr:
             return
-        data = stream.read(struct.unpack(HDR_FORMAT, hdr))
+        data = stream.read(struct.unpack(HDR_FORMAT, hdr)[0])
         callback(data)
 
 
