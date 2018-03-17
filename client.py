@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+from io import BytesIO
 import sys
 import threading
 from queue import Queue
 import requests
 from pytun import TunTapDevice, IFF_TAP
-from common import get_mac, BROADCAST
+from common import get_mac, BROADCAST, dequeue, parse_packets, serialize_packets
 
 server_queue = Queue()
 
@@ -18,8 +19,9 @@ def read_data():
 def send_data():
     session = requests.Session()
     while True:
-        wdata = server_queue.get()
-        wans = session.post(server + '/send', my_mac + wdata)
+        wdata = dequeue(server_queue)
+        wans = session.post(server + '/send',
+                            my_mac + serialize_packets(wdata))
         if wans.status_code != 200:
             print("send: received status code " + str(wans.status_code) +
                   ": " + wans.text)
@@ -54,10 +56,13 @@ def main():
             print("recv: received status code " + str(ans.status_code) + ": " +
                   ans.text)
             sys.exit(1)
-        data = ans.content
-        packet_mac = get_mac(data)
-        if packet_mac == my_mac or packet_mac == BROADCAST:
-            tap.write(data)
+
+        def process_packet(data):
+            packet_mac = get_mac(data)
+            if packet_mac == my_mac or packet_mac == BROADCAST:
+                tap.write(data)
+
+        parse_packets(BytesIO(ans.content), process_packet)
 
 
 if __name__ == '__main__':

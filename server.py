@@ -6,7 +6,7 @@ import traceback
 from queue import Queue, Empty
 from wsgiserver import WSGIServer
 from pytun import TunTapDevice, IFF_TAP
-from common import get_mac, BROADCAST
+from common import get_mac, BROADCAST, dequeue, parse_packets, serialize_packets
 
 MYMAC = b'ter000'
 IP_PREFIX = (10, 9)
@@ -31,7 +31,7 @@ def put_in_queue(dest_mac, data):
 
 def get_from_queue(dest_mac):
     try:
-        return queue[dest_mac].get(timeout=2)
+        return dequeue(queue[dest_mac], timeout=2)
     except Empty:
         return None
 
@@ -63,16 +63,15 @@ def inner_application(env, start_response):
             if client_mac not in queue:
                 start_response('403 Forbidden', [])
                 return [b""]
-            data = env['wsgi.input'].read()
-            dest_mac = get_mac(data)
-            if dest_mac == MYMAC or dest_mac == BROADCAST:
-                tap.write(data)
-            if dest_mac == MYMAC:
-                start_response('200 OK', [])
-                return []
-            if not put_in_queue(dest_mac, data):
-                start_response('404 Not Found', [])
-                return [b'No such MAC address']
+
+            def process_packet(data):
+                dest_mac = get_mac(data)
+                if dest_mac == MYMAC or dest_mac == BROADCAST:
+                    tap.write(data)
+                if dest_mac != MYMAC:
+                    put_in_queue(dest_mac, data)
+
+            parse_packets(env['wsgi.input'], process_packet)
             start_response('200 OK', [])
             return []
 
@@ -82,11 +81,11 @@ def inner_application(env, start_response):
                 start_response('403 Forbidden', [])
                 return [b""]
             data = get_from_queue(client_mac)
-            if data is None:
+            if data is None or not data:
                 start_response('204 No content', [])
                 return [b'']
             start_response('200 OK', [])
-            return [data]
+            return [serialize_packets(data)]
 
         start_response('404 Not Found', [('Content-Type', 'text/html')])
         return [b'<h1>Not Found</h1>']
