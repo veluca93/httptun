@@ -99,20 +99,24 @@ def inner_application(env, start_response):
         start_response('500', [])
         return [b'Internal server error']
 
+
 def application(env, real_start_response):
     answer_status = 0
+
     def start_response(status, hdrs):
         nonlocal answer_status
         answer_status = status
         real_start_response(status, hdrs)
+
     start = datetime.datetime.now()
     data = inner_application(env, start_response)
     end = datetime.datetime.now()
-    print(env['REMOTE_ADDR'] + ": " + "%.5f" % ((end-start).total_seconds()) + " " + env['PATH_INFO'] + ' ' + str(answer_status))
+    print(env['REMOTE_ADDR'] + ": " + "%.5f" % ((end - start).total_seconds())
+          + " " + env['PATH_INFO'] + ' ' + str(answer_status))
     return data
 
 
-if __name__ == '__main__':
+def main():
     global tap
     tap = TunTapDevice(flags=IFF_TAP)
     tap.addr = ".".join(map(str, IP_PREFIX + (0, 1)))
@@ -124,3 +128,7 @@ if __name__ == '__main__':
     tap_reader.start()
     print('Serving on 8088...')
     WSGIServer(application, port=8088).start()
+
+
+if __name__ == '__main__':
+    main()

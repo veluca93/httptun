@@ -27,7 +27,7 @@ def send_data():
                   ": " + wans.text)
 
 
-if __name__ == '__main__':
+def main():
     global tap, my_mac, my_ip, server
     server = sys.argv[1]
     while server.endswith('/'):
@@ -59,3 +59,7 @@ if __name__ == '__main__':
         data = ans.content
         if data[4:10] == my_mac or data[4:10] == BROADCAST:
             tap.write(data)
+
+
+if __name__ == '__main__':
+    main()
