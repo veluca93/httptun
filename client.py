@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
+from __future__ import print_function
+
 from io import BytesIO
 import sys
+import os
 import threading
+import traceback
 from queue import Queue
 import requests
 from pytun import TunTapDevice, IFF_TAP
@@ -11,20 +15,28 @@ server_queue = Queue()
 
 
 def read_data():
-    while True:
-        wdata = tap.read(2 * tap.mtu)
-        server_queue.put(wdata)
+    try:
+        while True:
+            wdata = tap.read(2 * tap.mtu)
+            server_queue.put(wdata)
+    except:
+        traceback.print_exc()
+        os._exit(1)
 
 
 def send_data():
-    session = requests.Session()
-    while True:
-        wdata = dequeue(server_queue)
-        wans = session.post(server + '/send',
-                            my_mac + serialize_packets(wdata))
-        if wans.status_code != 200:
-            print("send: received status code " + str(wans.status_code) +
-                  ": " + wans.text)
+    try:
+        session = requests.Session()
+        while True:
+            wdata = dequeue(server_queue)
+            wans = session.post(server + '/send',
+                                my_mac + serialize_packets(wdata))
+            if wans.status_code != 200:
+                print("send: received status code " + str(wans.status_code) +
+                      ": " + wans.text)
+    except:
+        traceback.print_exc()
+        os._exit(1)
 
 
 def main():
@@ -39,6 +51,7 @@ def main():
     my_ip = ans[6:10]
     tap = TunTapDevice(flags=IFF_TAP)
     tap.addr = ".".join(map(str, my_ip))
+    print("My ip is:", tap.addr)
     tap.netmask = '255.255.0.0'
     tap.mtu = 1300
     tap.hwaddr = my_mac
