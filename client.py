@@ -41,14 +41,21 @@ def send_data():
 
 def main():
     global tap, my_mac, my_ip, server
+    if len(sys.argv) != 3:
+        print("Usage: %s url password" % sys.argv[0])
+        sys.exit(1)
     server = sys.argv[1]
+    password = sys.argv[2]
     while server.endswith('/'):
         server = server[:-1]
 
     session = requests.Session()
-    ans = session.post(server + '/connect', 'very_secret').content
-    my_mac = ans[:6]
-    my_ip = ans[6:10]
+    ans = session.post(server + '/connect', password)
+    res = ans.content
+    if ans.status_code != 200:
+        raise ValueError("Failed to connect: " + str(res))
+    my_mac = res[:6]
+    my_ip = res[6:10]
     tap = TunTapDevice(flags=IFF_TAP)
     tap.addr = ".".join(map(str, my_ip))
     print("My ip is:", tap.addr)

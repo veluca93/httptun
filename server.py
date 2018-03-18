@@ -4,6 +4,8 @@ import os
 import threading
 import traceback
 from queue import Queue, Empty
+
+import sys
 from wsgiserver import WSGIServer
 from pytun import TunTapDevice, IFF_TAP
 from common import get_mac, BROADCAST, dequeue, parse_packets, serialize_packets
@@ -46,9 +48,9 @@ def read_data():
 def inner_application(env, start_response):
     try:
         if env['PATH_INFO'] == '/connect':
-            if env['wsgi.input'].read() != b'very_secret':
+            if env['wsgi.input'].read().decode() != sys.argv:
                 start_response('403 Forbidden', [])
-                return [b""]
+                return [b"bad password"]
             while True:
                 new_mac = b'terc' + os.urandom(2)
                 if new_mac not in queue:
@@ -112,7 +114,11 @@ def application(env, real_start_response):
 
 
 def main():
-    global tap
+    global tap, password
+    if len(sys.argv) != 2:
+        print("Usage: %s password" % sys.argv[0])
+        sys.exit(1)
+    password = sys.argv
     tap = TunTapDevice(flags=IFF_TAP)
     tap.addr = ".".join(map(str, IP_PREFIX + (0, 1)))
     tap.netmask = '255.255.0.0'
