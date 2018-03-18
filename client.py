@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 from __future__ import print_function
 
-from io import BytesIO
-import sys
 import os
+import sys
 import threading
 import traceback
+from io import BytesIO
 from queue import Queue
+
 import requests
-from pytun import TunTapDevice, IFF_TAP
 from common import get_mac, BROADCAST, dequeue, parse_packets, serialize_packets
+from pytun import TunTapDevice, IFF_TAP
 
 server_queue = Queue()
 
@@ -44,18 +45,36 @@ def main():
     if len(sys.argv) != 3:
         print("Usage: %s url password" % sys.argv[0])
         sys.exit(1)
+
     server = sys.argv[1]
     password = sys.argv[2]
     while server.endswith('/'):
         server = server[:-1]
 
     session = requests.Session()
-    ans = session.post(server + '/connect', password)
-    res = ans.content
-    if ans.status_code != 200:
-        raise ValueError("Failed to connect: " + str(res))
-    my_mac = res[:6]
-    my_ip = res[6:10]
+    if os.path.exists("/tmp/tap0cache"):
+        with open("/tmp/tap0cache", "rb") as f:
+            data = f.read(10)
+            my_mac = data[:6]
+            my_ip = data[6:10]
+            ans = session.post(
+                server + '/reconnect?ip=' + my_ip.hex() + "&mac=" +
+                my_mac.hex(),
+                password)
+            res = ans.content
+            if ans.status_code != 200:
+                os.remove("/tmp/tap0cache")
+                raise ValueError("Failed to connect: " + str(res))
+    else:
+        ans = session.post(server + '/connect', password)
+        res = ans.content
+        if ans.status_code != 200:
+            raise ValueError("Failed to connect: " + str(res))
+        my_mac = res[:6]
+        my_ip = res[6:10]
+        with open("/tmp/tap0cache", "wb") as f:
+            f.write(res)
+
     tap = TunTapDevice(flags=IFF_TAP)
     tap.addr = ".".join(map(str, my_ip))
     print("My ip is:", tap.addr)
@@ -63,6 +82,7 @@ def main():
     tap.mtu = 1300
     tap.hwaddr = my_mac
     tap.up()
+
     tap_reader = threading.Thread(target=read_data, daemon=True)
     tap_reader.start()
     sender = threading.Thread(target=send_data, daemon=True)

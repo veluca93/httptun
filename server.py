@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 import datetime
 import os
+import sys
 import threading
 import traceback
+import urllib.parse
 from queue import Queue, Empty
 
-import sys
-from wsgiserver import WSGIServer
-from pytun import TunTapDevice, IFF_TAP
 from common import get_mac, BROADCAST, dequeue, parse_packets, serialize_packets
+from pytun import TunTapDevice, IFF_TAP
+from wsgiserver import WSGIServer
 
 MYMAC = b'ter000'
 IP_PREFIX = (10, 9)
@@ -46,9 +47,21 @@ def read_data():
 
 
 def inner_application(env, start_response):
+    global password
     try:
+        if env['PATH_INFO'] == '/reconnect':
+            if env['wsgi.input'].read().decode() != password:
+                start_response('403 Forbidden', [])
+                return [b"bad password"]
+            data = urllib.parse.parse_qs(env["QUERY_STRING"])
+            ip = bytes.fromhex(data["ip"][0])
+            mac = bytes.fromhex(data["mac"][0])
+            init_queue(mac)
+            start_response('200 OK', [])
+            return [mac, ip]
+
         if env['PATH_INFO'] == '/connect':
-            if env['wsgi.input'].read().decode() != sys.argv:
+            if env['wsgi.input'].read().decode() != password:
                 start_response('403 Forbidden', [])
                 return [b"bad password"]
             while True:
@@ -118,7 +131,7 @@ def main():
     if len(sys.argv) != 2:
         print("Usage: %s password" % sys.argv[0])
         sys.exit(1)
-    password = sys.argv
+    password = sys.argv[1]
     tap = TunTapDevice(flags=IFF_TAP)
     tap.addr = ".".join(map(str, IP_PREFIX + (0, 1)))
     tap.netmask = '255.255.0.0'
