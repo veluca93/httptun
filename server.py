@@ -14,7 +14,10 @@ from wsgiserver import WSGIServer
 MYMAC = b'ter000'
 IP_PREFIX = (10, 9)
 
+ip_sequential = 2
+
 queue = dict()
+ips = dict()
 
 
 def init_queue(dest_mac):
@@ -49,34 +52,28 @@ def read_data():
 def inner_application(env, start_response):
     global password
     try:
-        if env['PATH_INFO'] == '/reconnect':
-            if env['wsgi.input'].read().decode() != password:
-                start_response('403 Forbidden', [])
-                return [b"bad password"]
-            data = urllib.parse.parse_qs(env["QUERY_STRING"])
-            ip = bytes.fromhex(data["ip"][0])
-            mac = bytes.fromhex(data["mac"][0])
-            init_queue(mac)
-            start_response('200 OK', [])
-            return [mac, ip]
-
         if env['PATH_INFO'] == '/connect':
             if env['wsgi.input'].read().decode() != password:
-                start_response('403 Forbidden', [])
+                start_response('403 Forbidden', bytes(), [])
                 return [b"bad password"]
             while True:
                 new_mac = b'terc' + os.urandom(2)
                 if new_mac not in queue:
                     break
-            ip = bytes(bytearray(IP_PREFIX)) + new_mac[4:6]
+            global ip_sequential
+            ip = bytes(
+                bytearray(IP_PREFIX) + bytearray((ip_sequential // 256,
+                                                  ip_sequential % 256)))
+            ip_sequential += 1
             init_queue(new_mac)
-            start_response('200 OK', [])
+            ips[new_mac] = ip
+            start_response('200 OK', ip, [])
             return [new_mac, ip]
 
         if env['PATH_INFO'] == '/send':
             client_mac = env['wsgi.input'].read(6)
             if client_mac not in queue:
-                start_response('403 Forbidden', [])
+                start_response('403 Forbidden', bytes(), [])
                 return [b""]
 
             def process_packet(data):
@@ -87,42 +84,51 @@ def inner_application(env, start_response):
                     put_in_queue(dest_mac, data)
 
             parse_packets(env['wsgi.input'], process_packet)
-            start_response('200 OK', [])
+            start_response('200 OK', ips[client_mac], [])
             return []
 
         if env['PATH_INFO'] == '/recv':
             client_mac = env['wsgi.input'].read(6)
             if client_mac not in queue:
-                start_response('403 Forbidden', [])
+                start_response('403 Forbidden', bytes(), [])
                 return [b""]
             data = get_from_queue(client_mac)
             if data is None or not data:
-                start_response('204 No content', [])
+                start_response('204 No content', ips[client_mac], [])
                 return [b'']
-            start_response('200 OK', [])
+            start_response('200 OK', ips[client_mac], [])
             return [serialize_packets(data)]
 
-        start_response('404 Not Found', [('Content-Type', 'text/html')])
+        start_response('404 Not Found', bytes(),
+                       [('Content-Type', 'text/html')])
         return [b'<h1>Not Found</h1>']
     except:
         traceback.print_exc()
-        start_response('500', [])
+        start_response('500', bytes(), [])
         return [b'Internal server error']
 
 
 def application(env, real_start_response):
     answer_status = 0
+    info = bytes()
 
-    def start_response(status, hdrs):
+    def start_response(status, client_info, hdrs):
         nonlocal answer_status
+        nonlocal info
         answer_status = status
+        info = client_info
         real_start_response(status, hdrs)
 
     start = datetime.datetime.now()
     data = inner_application(env, start_response)
     end = datetime.datetime.now()
-    print(env['REMOTE_ADDR'] + ": " + "%.5f" % ((end - start).total_seconds())
-          + " " + env['PATH_INFO'] + ' ' + str(answer_status))
+    log_line = (env['REMOTE_ADDR'] + ": " + "%.5f" %
+                ((end - start).total_seconds()) + " " + env['PATH_INFO'] +
+                ' ' + str(answer_status))
+    if len(info) == 4:
+        log_line = log_line.ljust(50)
+        log_line += " client ip: " + ".".join(map(str, info))
+    print(log_line)
     return data
 
 

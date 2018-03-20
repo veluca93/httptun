@@ -32,6 +32,8 @@ def send_data():
             wdata = dequeue(server_queue)
             wans = session.post(server + '/send',
                                 my_mac + serialize_packets(wdata))
+            if wans.status_code == 403:
+                os.remove("/tmp/tap0cache")
             if wans.status_code != 200:
                 print("send: received status code " + str(wans.status_code) +
                       ": " + wans.text)
@@ -57,14 +59,6 @@ def main():
             data = f.read(10)
             my_mac = data[:6]
             my_ip = data[6:10]
-            ans = session.post(
-                server + '/reconnect?ip=' + my_ip.hex() + "&mac=" +
-                my_mac.hex(),
-                password)
-            res = ans.content
-            if ans.status_code != 200:
-                os.remove("/tmp/tap0cache")
-                raise ValueError("Failed to connect: " + str(res))
     else:
         ans = session.post(server + '/connect', password)
         res = ans.content
@@ -92,6 +86,8 @@ def main():
         ans = session.post(server + '/recv', my_mac)
         if ans.status_code == 204:
             continue
+        if ans.status_code == 403:
+            os.remove("/tmp/tap0cache")
         if ans.status_code != 200:
             print("recv: received status code " + str(ans.status_code) + ": " +
                   ans.text)
