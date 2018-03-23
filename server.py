@@ -147,7 +147,7 @@ def main():
     tap_reader = threading.Thread(target=read_data, daemon=True)
     tap_reader.start()
     print('Serving on 8088...')
-    WSGIServer(application, port=8088).start()
+    WSGIServer(application, port=8088, numthreads=1000).start()
 
 
 if __name__ == '__main__':
